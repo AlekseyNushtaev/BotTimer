@@ -67,7 +67,7 @@ def format_duration(seconds: int) -> str:
 
 async def update_timer(timer_data: TimerData):
     while timer_data.active:
-        now = datetime.now() - timedelta(hours=DELTA)
+        now = datetime.now() + timedelta(hours=DELTA)
         end_datetime = datetime.combine(now.date(), timer_data.end_time)
 
         if end_datetime <= now:
@@ -205,7 +205,7 @@ async def process_button_urls(message: types.Message, state: FSMContext):
     # Отправляем сообщения во все активные чаты из БД
     for chat_id in get_all_chats():
         try:
-            now = datetime.now() - timedelta(hours=DELTA)
+            now = datetime.now() + timedelta(hours=DELTA)
             end_datetime = datetime.combine(now.date(), active_timer.end_time)
             if end_datetime <= now:
                 end_datetime += timedelta(days=1)
