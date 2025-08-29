@@ -107,12 +107,11 @@ async def update_timer(timer_data: TimerData):
                 try:
 
                     print(f'Удаляем старое сообщение в чате {chat_id}')
-                    for i in range(timer_data.chat_messages[chat_id] + 2, timer_data.chat_messages[chat_id] - 2, -1):
+                    for i in range(timer_data.chat_messages[chat_id] + 1, timer_data.chat_messages[chat_id] - 3, -1):
                         try:
                             await bot.delete_message(chat_id, i)
                         except:
                             pass
-                        await asyncio.sleep(0.01)
                     print('Удалено')
                 except Exception as e:
                     print(f'Сообщение не удалено в {chat_id}')
