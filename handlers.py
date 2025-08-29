@@ -12,12 +12,13 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from bot import bot
 from config import ADMIN_ID, DELTA
-from database import add_chat, remove_chat, get_all_chats  # Импорт из нового файла
+from database import add_chat, remove_chat, get_all_chats
 
 router = Router()
 
 # Хранилище данных
 active_timer = None
+
 
 class TimerStates(StatesGroup):
     pre_text = State()
@@ -26,10 +27,11 @@ class TimerStates(StatesGroup):
     button_names = State()
     button_urls = State()
 
-# Добавляем состояния для управления чатами
+
 class ChatManagementStates(StatesGroup):
     waiting_for_add_chat = State()
     waiting_for_remove_chat = State()
+
 
 class TimerData:
     def __init__(
@@ -48,9 +50,12 @@ class TimerData:
         self.chat_messages: Dict[str, int] = {}
         self.task: Optional[asyncio.Task] = None
         self.active = True
+        self.locks: Dict[str, asyncio.Lock] = {}  # Блокировки для каждого чата
+
 
 def is_admin(user_id: int) -> bool:
     return user_id == ADMIN_ID
+
 
 def format_duration(seconds: int) -> str:
     """Форматирует время в формат: X HOURS Y MINUTES"""
@@ -58,7 +63,8 @@ def format_duration(seconds: int) -> str:
     minutes = remainder // 60
 
     parts = []
-    parts.append(f"{hours} HOUR{'S' if hours != 1 else ''}")
+    if hours > 0:
+        parts.append(f"{hours} HOUR{'S' if hours != 1 else ''}")
     parts.append(f"{minutes} MINUTE{'S' if minutes != 1 else ''}")
     formatted = ' '.join(parts)
 
@@ -83,7 +89,7 @@ async def update_timer(timer_data: TimerData):
         # Форматирование времени
         total_seconds = int(remaining.total_seconds())
         formatted_time = format_duration(total_seconds)
-        timer_text = f"{timer_data.pre_text} {formatted_time}{timer_data.post_text}"
+        timer_text = f"{timer_data.pre_text}\n{formatted_time}\n{timer_data.post_text}"
 
         # Создание клавиатуры - каждая кнопка в отдельный ряд
         builder = InlineKeyboardBuilder()
@@ -92,25 +98,44 @@ async def update_timer(timer_data: TimerData):
         keyboard = builder.as_markup()
 
         # Обновление сообщений во всех чатах
-        for chat_id, msg_id in list(timer_data.chat_messages.items()):
-            try:
-                await bot.delete_message(chat_id=chat_id, message_id=msg_id)
-            except Exception as e:
-                print(f"Ошибка при удалении сообщения: {e}")
-                continue
+        for chat_id in list(timer_data.chat_messages.keys()):
+            # Создаем блокировку для чата, если ее нет
+            if chat_id not in timer_data.locks:
+                timer_data.locks[chat_id] = asyncio.Lock()
 
-            try:
-                new_msg = await bot.send_message(
-                    chat_id=chat_id,
-                    text=timer_text,
-                    reply_markup=keyboard,
-                    parse_mode="HTML"
-                )
-                timer_data.chat_messages[chat_id] = new_msg.message_id
-            except Exception as e:
-                print(f"Ошибка при отправке сообщения: {e}")
+            async with timer_data.locks[chat_id]:
+                try:
+
+                    print(f'Удаляем старое сообщение в чате {chat_id}')
+                    await bot.delete_message(chat_id=chat_id, message_id=timer_data.chat_messages[chat_id])
+                    print('Удалено')
+                except Exception as e:
+                    print(f'Сообщение не удалено в {chat_id}')
+                    print(str(e))
+                    # Если сообщение не найдено, продолжаем
+                    if "message to delete not found" not in str(e).lower():
+                        print(f"Ошибка при удалении сообщения в {chat_id}: {e}")
+                        continue
+
+                try:
+                    print(f'Отправляем новое сообщение в чате {chat_id}')
+                    # Отправляем новое сообщение
+                    new_msg = await bot.send_message(
+                        chat_id=chat_id,
+                        text=timer_text,
+                        reply_markup=keyboard,
+                        parse_mode="HTML"
+                    )
+                    print('Отправлено')
+                    timer_data.chat_messages[chat_id] = new_msg.message_id
+                except Exception as e:
+                    print(f"Ошибка при отправке сообщения в {chat_id}: {e}")
+                    # Если бота исключили из чата, удаляем чат из списка
+                    if "chat not found" in str(e).lower() or "bot was kicked" in str(e).lower():
+                        timer_data.chat_messages.pop(chat_id, None)
 
         await asyncio.sleep(10)
+
 
 @router.message(Command("start"))
 async def cmd_start(message: types.Message):
@@ -213,7 +238,7 @@ async def process_button_urls(message: types.Message, state: FSMContext):
             remaining = end_datetime - now
             total_seconds = int(remaining.total_seconds())
             formatted_time = format_duration(total_seconds)
-            timer_text = f"{active_timer.pre_text}\n<b>{formatted_time}</b>\n{active_timer.post_text}"
+            timer_text = f"{active_timer.pre_text}\n{formatted_time}\n{active_timer.post_text}"
 
             # Кнопки в отдельных рядах
             builder = InlineKeyboardBuilder()
