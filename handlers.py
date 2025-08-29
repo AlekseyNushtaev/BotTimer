@@ -89,7 +89,7 @@ async def update_timer(timer_data: TimerData):
         # Форматирование времени
         total_seconds = int(remaining.total_seconds())
         formatted_time = format_duration(total_seconds)
-        timer_text = f"{timer_data.pre_text}\n{formatted_time}\n{timer_data.post_text}"
+        timer_text = f"{timer_data.pre_text} {formatted_time}{timer_data.post_text}"
 
         # Создание клавиатуры - каждая кнопка в отдельный ряд
         builder = InlineKeyboardBuilder()
@@ -115,8 +115,7 @@ async def update_timer(timer_data: TimerData):
                     # Если сообщение не найдено, продолжаем
                     if "message to delete not found" not in str(e).lower():
                         print(f"Ошибка при удалении сообщения в {chat_id}: {e}")
-                        continue
-
+                await asyncio.sleep(0.01)
                 try:
                     print(f'Отправляем новое сообщение в чате {chat_id}')
                     # Отправляем новое сообщение
@@ -238,7 +237,7 @@ async def process_button_urls(message: types.Message, state: FSMContext):
             remaining = end_datetime - now
             total_seconds = int(remaining.total_seconds())
             formatted_time = format_duration(total_seconds)
-            timer_text = f"{active_timer.pre_text}\n{formatted_time}\n{active_timer.post_text}"
+            timer_text = f"{active_timer.pre_text} {formatted_time}{active_timer.post_text}"
 
             # Кнопки в отдельных рядах
             builder = InlineKeyboardBuilder()
